@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import matplotlib.colors as mcolors
 
+st.set_page_config(layout="wide")
+
 # Carregar les dades del fitxer Excel
 excel_file = "bbdd.xlsx"
 consum_electric = pd.read_excel(excel_file, sheet_name="consum_electric")
