@@ -3,3 +3,7 @@ streamlit
 matplotlib
 plotly
 openpyxl
+geopandas
+folium
+streamlit_folium
+numpy
