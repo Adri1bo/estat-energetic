@@ -13,6 +13,8 @@ from datetime import datetime
 #de cada tecnologia difereixen, per això es defineixen usn factors de capacitat basats en la informació extreta de ree pel 2023
 #https://www.ree.es/es/datos/balance/balance-electrico
 #https://www.ree.es/es/datos/generacion/potencia-instalada
+#filtrarem les dades del datadis i només avaluarem les que tenen compensació d'excedents per lo que segurament treurem totes 
+#les tecnologies que no siguin FV, el mateix farem amb el RAC, treurem els tecnologies que no siguin fotovoltaica.
 
 potencia = {'HIDROELECTRICA':17097, 
              'COGENERACIO':5611, 
@@ -32,7 +34,7 @@ generacio = {'HIDROELECTRICA':25761,
 
 #els factors de capacitat s'eleven a un factor y per amplair diferències excedentaries entre tecnologies
 #i evitar desajustos en els que un poble de diferents provincies amb la mateixa potencia FV tenen excedents 5 vegades superiors
-factors_capacitat = {x:(generacio[x]/potencia[x]/8.760)**1.5 for x in potencia}
+factors_capacitat = {x:(generacio[x]/potencia[x]/8.760)**1 for x in potencia}
 
 
 def get_year(I_DAT_INSCRIP_RAC):
@@ -62,8 +64,8 @@ anys = range(2022,datetime.now().year)
 for year in anys:
     try:
         df = pd.read_csv('raw data/Catalunya autoconsum '+str(year)+'.csv')
-        #escurcem la informació
-        df = df.loc[df["selfConsumption"] !='Sin Excedentes Individual']
+        #escurcem la informació només ens quedem els que tenen excedents i compensació
+        df = df[df['selfConsumption'].str.contains("sin", case=False)== False]
         df = df.groupby(['dataYear','province','selfConsumption']).agg({'sumPower' : 'first',
                                                                   'sumContracts' : 'first',
                                                                   'sumEnergy' : 'sum'}).reset_index()
@@ -77,9 +79,9 @@ for year in anys:
         pass
 
 
-#importem dades del RAC i netegem els que no tenen excedents i agrupem per anys, municipis i tecnologia
+#importem dades del RAC i netegem els que no tenen compensació d'excedents (a0) i agrupem per anys, municipis i tecnologia
 RAC = pd.read_excel('RAC.xlsx')
-RAC = RAC.dropna(subset=['S-SUBSECCIO-REGISTRE'])
+RAC = RAC[RAC['S-SUBSECCIO-REGISTRE']=='a0']
 RAC['ANY'] = RAC['I_DAT_INSCRIP_RAC'].apply(get_year)
 RAC = RAC.groupby(['ANY', 'I_TECNOLOGIA', 'I_MUNICIPI', 'I_COMARCA']).agg({'I_KW_TOT':'sum','I_INE_MUNICIPI':'first'}).reset_index()
 RAC['province'] = RAC['I_INE_MUNICIPI'].apply(get_province)
