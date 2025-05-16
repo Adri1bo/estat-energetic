@@ -60,6 +60,10 @@ def anys_complets(df):
 def suma_nan_si_cal(df):
     return df if df.isnull().any() else df.sum()
 
+def moda_mes_comuna(s):
+    modes = s.mode()
+    return modes.iloc[0] if not modes.empty else None
+
 # Carregar les dades del fitxer Excel
 excel_file = "bbdd.xlsx"
 consum_electric = carregar_dades(excel_file, "consum_electric")
@@ -67,6 +71,8 @@ consum_termic = carregar_dades(excel_file, "consum_termic")
 generacio_excedents = carregar_dades(excel_file, "generacio_electrica_excedents")
 generacio_plantes = carregar_dades(excel_file, "generacio_electrica_plantes")
 PROENCAT_demanda = carregar_dades(excel_file, "PROENCAT")
+
+# ESPAI PER FER COMPROVACIONS DE DADES, QUE TOTES LES COMARQUES ESTIGUIN EN LA SEVA PROVÍNCIA...
 
 #carregar dades geojson
 
@@ -87,12 +93,12 @@ macro_taula = pd.concat([total_consum, total_generacio, PROENCAT_demanda], ignor
 macro_taula.fillna(0, inplace=True)
 macro_taula=macro_taula.groupby(['País','Comarca','Província','Tipus energètic','Font','Estat','Any']).agg({
     "Valor":"sum",
-    "Unitats":"first",
-    "origen dades":"first",
+    "Unitats":moda_mes_comuna,
+    "origen dades":moda_mes_comuna,
     "Potència instal·lada":"sum",
-    "Unitats.1":"first",
+    "Unitats.1":moda_mes_comuna,
     "Superfície":"sum",
-    "Unitats_sup":"first"
+    "Unitats_sup":moda_mes_comuna
     }).reset_index()
 macro_taula['Valor'] = macro_taula['Valor'].replace(0, np.nan)
 # fem merges pels gràfics de mapa
@@ -101,15 +107,15 @@ macro_taula = macro_taula.merge(geo_com, left_on="Comarca", right_on="NOMCOMAR",
 
 #taula agrupada per gràfics de mapa
 taula_tipus_energetic=macro_taula.groupby(['Comarca','Tipus energètic','Any']).agg({
-    "Província":"first",
+    "Província":moda_mes_comuna,
     "Valor":"sum",
-    "Unitats":"first",
-    "origen dades":"first",
+    "Unitats":moda_mes_comuna,
+    "origen dades":moda_mes_comuna,
     "Potència instal·lada":"sum",
-    "Unitats.1":"first",
+    "Unitats.1":moda_mes_comuna,
     "Superfície":"sum",
-    "Unitats_sup":"first",
-    "geometry":"first"
+    "Unitats_sup":moda_mes_comuna,
+    "geometry":moda_mes_comuna
     }).reset_index()
 
 # Calculem el balanç
@@ -135,6 +141,8 @@ balanc_long = balanc_long[['Comarca','Província','Any',"geometry", 'Valor','Tip
 # Finalment, concat amb la taula original
 taula_tipus_energetic = pd.concat([taula_tipus_energetic, balanc_long], ignore_index=True)
 
+# FILTRE TEMPORAL TARRAGONA
+taula_tipus_energetic = taula_tipus_energetic[taula_tipus_energetic["Província"] == "Tarragona"]
 
 
 
