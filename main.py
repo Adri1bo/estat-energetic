@@ -90,8 +90,10 @@ total_generacio["Comarca"] = total_generacio["Comarca"].str.strip()
 
 # Unir les dades per comarca i any
 macro_taula = pd.concat([total_consum, total_generacio, PROENCAT_demanda], ignore_index=True)
-macro_taula.fillna(0, inplace=True)
-macro_taula=macro_taula.groupby(['País','Comarca','Província','Tipus energètic','Font','Estat','Any']).agg({
+macro_taula['renovable'] = macro_taula['renovable'].fillna('Desconegut')
+macro_taula = macro_taula.fillna(0)
+
+macro_taula=macro_taula.groupby(['País','Comarca','Província','Tipus energètic','renovable','Font','Estat','Any']).agg({
     "Valor":"sum",
     "Unitats":moda_mes_comuna,
     "origen dades":moda_mes_comuna,
@@ -101,12 +103,13 @@ macro_taula=macro_taula.groupby(['País','Comarca','Província','Tipus energèti
     "Unitats_sup":moda_mes_comuna
     }).reset_index()
 macro_taula['Valor'] = macro_taula['Valor'].replace(0, np.nan)
+
 # fem merges pels gràfics de mapa
 macro_taula = macro_taula.merge(geo_com, left_on="Comarca", right_on="NOMCOMAR", how="left")
 
 
 #taula agrupada per gràfics de mapa
-taula_tipus_energetic=macro_taula.groupby(['Comarca','Tipus energètic','Any']).agg({
+taula_tipus_energetic_mare=macro_taula.groupby(['Comarca','Tipus energètic','renovable','Any']).agg({
     "Província":moda_mes_comuna,
     "Valor":"sum",
     "Unitats":moda_mes_comuna,
@@ -117,6 +120,31 @@ taula_tipus_energetic=macro_taula.groupby(['Comarca','Tipus energètic','Any']).
     "Unitats_sup":moda_mes_comuna,
     "geometry":moda_mes_comuna
     }).reset_index()
+
+with st.popover("Configura filtres"):
+    # Selecció de Províncies
+    provincies = macro_taula["Província"].unique()
+    provincies_seleccionades = st.multiselect("Selecciona Províncies:", provincies, default=provincies[0])
+    
+    # Selecció de comarques
+    comarques = macro_taula["Comarca"].unique()
+    comarques_seleccionades = st.multiselect("Selecciona comarques:", comarques, default=comarques[0])
+    
+    # Filtrar dades per comarca seleccionada
+    # Selecció d'any
+    anys = macro_taula["Any"].unique()
+    anys = anys[anys != 0.0]
+    any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0)
+    # Selecció d'estats de les plantes
+    estats_macro = macro_taula["Estat"].unique()
+    estats = generacio_plantes["Estat"].unique()
+    estats_seleccionats = st.multiselect("Selecciona els estats:", estats, default=estats)
+    estats_seleccionats = list(set(estats_macro) - set(estats)) + estats_seleccionats
+    renovables = st.toggle("Només generació amb renovables", value = True)
+    if renovables:
+        taula_tipus_energetic = taula_tipus_energetic_mare[taula_tipus_energetic_mare['renovable'] != 'No renovable']
+    else:
+        taula_tipus_energetic = taula_tipus_energetic_mare
 
 # Calculem el balanç
 # Primer: agrupem i calculem consum i generació per comarca i any
@@ -153,25 +181,7 @@ st.title("Consums i Generació per Comarca")
 consum_agrupat = total_consum.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
 generacio_agrupat = total_generacio.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
 
-with st.popover("Configura filtres"):
-    # Selecció de Províncies
-    provincies = macro_taula["Província"].unique()
-    provincies_seleccionades = st.multiselect("Selecciona Províncies:", provincies, default=provincies[0])
-    
-    # Selecció de comarques
-    comarques = macro_taula["Comarca"].unique()
-    comarques_seleccionades = st.multiselect("Selecciona comarques:", comarques, default=comarques[0])
-    
-    # Filtrar dades per comarca seleccionada
-    # Selecció d'any
-    anys = macro_taula["Any"].unique()
-    anys = anys[anys != 0.0]
-    any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0)
-    # Selecció d'estats de les plantes
-    estats_macro = macro_taula["Estat"].unique()
-    estats = generacio_plantes["Estat"].unique()
-    estats_seleccionats = st.multiselect("Selecciona els estats:", estats, default=estats)
-    estats_seleccionats = list(set(estats_macro) - set(estats)) + estats_seleccionats
+
 
 col1, col2 = st.columns([1,1])
 
@@ -180,7 +190,7 @@ with col1:
     
     with tab1:
         # --- Selecció del valor a mostrar ---
-        
+                
         taula_tipus_energetic_consum = taula_tipus_energetic[taula_tipus_energetic["Tipus energètic"] == "Consum energia final"]
         
         geo = gpd.GeoDataFrame(taula_tipus_energetic_consum, geometry="geometry", crs="EPSG:4326")
@@ -196,20 +206,33 @@ with col1:
                 geojson=geo_filtrat.geometry,
                 locations=geo_filtrat.index,
                 color="Valor",
-                color_continuous_scale="YlGnBu",  # escala positiva
+                color_continuous_scale="ylorrd",  # escala positiva
                 range_color=[0, geo_filtrat['Valor'].max()],
                 mapbox_style="carto-positron",
                 zoom=6,
-                center={"lat": 41.7, "lon": 1.5},
+                center={"lat": 41.8, "lon": 1.5},
                 height=500
             )
-            
+            fig1.update_layout(
+                margin={"r":0,"t":0,"l":0,"b":0},
+                coloraxis_colorbar=dict(title="Balanç (kWh)")
+            )
             st.plotly_chart(fig1, use_container_width=False, key='consum')
     
     with tab2:
         # --- Selecció del valor a mostrar ---
         taula_tipus_energetic_generacio = taula_tipus_energetic[taula_tipus_energetic["Tipus energètic"] == "Generació"]
-        
+        taula_tipus_energetic_generacio = taula_tipus_energetic_generacio.groupby(['Comarca','Tipus energètic','Any']).agg({
+            "Província":moda_mes_comuna,
+            "Valor":"sum",
+            "Unitats":moda_mes_comuna,
+            "origen dades":moda_mes_comuna,
+            "Potència instal·lada":"sum",
+            "Unitats.1":moda_mes_comuna,
+            "Superfície":"sum",
+            "Unitats_sup":moda_mes_comuna,
+            "geometry":moda_mes_comuna
+            }).reset_index()
         geo = gpd.GeoDataFrame(taula_tipus_energetic_generacio, geometry="geometry", crs="EPSG:4326")
         geo = geo.set_index("Comarca")  # fer servir com a ID
     
@@ -227,10 +250,13 @@ with col1:
                 range_color=[0, geo_filtrat['Valor'].max()],
                 mapbox_style="carto-positron",
                 zoom=6,
-                center={"lat": 41.7, "lon": 1.5},
+                center={"lat": 41.8, "lon": 1.5},
                 height=500
             )
-            
+            fig2.update_layout(
+                margin={"r":0,"t":0,"l":0,"b":0},
+                coloraxis_colorbar=dict(title="Balanç (kWh)")
+            )
             st.plotly_chart(fig2, use_container_width=False, key='generacio')
     
     with tab3:
@@ -245,13 +271,13 @@ with col1:
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            max_abs = max(abs(geo_filtrat['Valor']))
+            max_abs = max(abs(geo_filtrat['Valor'].dropna()))
             fig3 = px.choropleth_mapbox(
                 geo_filtrat,
                 geojson=geo_filtrat.geometry,
                 locations=geo_filtrat.index,
                 color="Valor",  # pot ser 'balanç'
-                color_continuous_scale="RdBu",  # escala bipolar: vermell-blau
+                color_continuous_scale="rdylgn",  # escala bipolar: vermell-blau
                 mapbox_style="carto-positron",
                 range_color=[-max_abs, max_abs],  # 
                 center={"lat": 41.8, "lon": 1.5},
@@ -300,21 +326,31 @@ with col2:
     # Filtrar dades per comarca i any seleccionats
     # Filtrar la macrotaula per comarca i any seleccionats
     # Filtrar dades per comarca i any seleccionats
-    
+    # Filtrar per renovables o no
     macro_taula_filtrada = macro_taula[
         ((macro_taula["Província"].isin(provincies_seleccionades)) |
         (macro_taula["Comarca"].isin(comarques_seleccionades))) &
         (macro_taula["Any"].isin([any_seleccionat,0])) & 
         (macro_taula["Estat"].isin(estats_seleccionats))
     ]
+    if renovables:
+        macro_taula_filtrada = macro_taula_filtrada[macro_taula_filtrada['renovable'] != 'No renovable']
+    else:
+        pass
+
     
     # Agrupar per Tipus energètic
     dades_agrupades = macro_taula_filtrada.groupby(
         ["Font", "Estat", "Tipus energètic"]
     )["Valor"].sum().unstack(fill_value=0)
+    
     # Fer un join de "Font" i "Estat" per combinar els nivells d'índex
     dades_agrupades = dades_agrupades.T.reset_index()
     dades_agrupades.columns = ["_".join(col) for col in dades_agrupades.columns]
+    
+    #treiem la fila d'energia final 2023 proencat que ja tenim de dades reals i li afegim el barret de les renovables tèrmiques
+    dades_agrupades.loc[dades_agrupades['Tipus energètic_'] == 'Consum energia final', 'Renovables ús tèrmic_Prospectiu'] = dades_agrupades.loc[dades_agrupades['Tipus energètic_'] == 'Consum energia final 2023', 'Renovables ús tèrmic_Prospectiu'].iloc[0]
+    #dades_agrupades = dades_agrupades[dades_agrupades['Tipus energètic_'] != 'Consum energia final 2023']
     
     
     # Transformació a format llarg
@@ -326,6 +362,9 @@ with col2:
     # Arrodonir els valors a 2 decimals
     dades_long["Valor"] = dades_long["Valor"].round(0)
     
+    #ordenar alfabeticament
+    dades_long = dades_long.sort_values(by='Font_Estat')
+
     
     # Definir un esquema de colors personalitzat
     color_map = {}
