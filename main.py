@@ -427,7 +427,7 @@ col1.metric("Potència autoconsum 2023", "{:.2f} MW".format(pot_autoconsum.loc[2
             "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']-pot_autoconsum.loc[2022]['Potència instal·lada']), 
             border=True)
 col2.metric("Potencial autoconsum", "4 mph", "2 mph", border=True)
-col2.markdown("Estudi URV")
+col2.markdown("Font: Estudi URV")
 col3.metric("Potència fotovoltaica", "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']), 
             "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']-pot_FV.loc[2022]['Potència instal·lada'])
             , border=True)
