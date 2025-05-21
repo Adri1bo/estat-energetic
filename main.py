@@ -350,7 +350,7 @@ with col2:
     
     #treiem la fila d'energia final 2023 proencat que ja tenim de dades reals i li afegim el barret de les renovables tèrmiques
     dades_agrupades.loc[dades_agrupades['Tipus energètic_'] == 'Consum energia final', 'Renovables ús tèrmic_Prospectiu'] = dades_agrupades.loc[dades_agrupades['Tipus energètic_'] == 'Consum energia final 2023', 'Renovables ús tèrmic_Prospectiu'].iloc[0]
-    #dades_agrupades = dades_agrupades[dades_agrupades['Tipus energètic_'] != 'Consum energia final 2023']
+    dades_agrupades = dades_agrupades[dades_agrupades['Tipus energètic_'] != 'Consum energia final 2023']
     
     
     # Transformació a format llarg
