@@ -327,16 +327,17 @@ with col2:
     # Filtrar la macrotaula per comarca i any seleccionats
     # Filtrar dades per comarca i any seleccionats
     # Filtrar per renovables o no
-    macro_taula_filtrada = macro_taula[
+    macro_taula_filtrada_wo_any = macro_taula[
         ((macro_taula["Província"].isin(provincies_seleccionades)) |
         (macro_taula["Comarca"].isin(comarques_seleccionades))) &
-        (macro_taula["Any"].isin([any_seleccionat,0])) & 
         (macro_taula["Estat"].isin(estats_seleccionats))
     ]
     if renovables:
-        macro_taula_filtrada = macro_taula_filtrada[macro_taula_filtrada['renovable'] != 'No renovable']
+        macro_taula_filtrada_wo_any = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['renovable'] != 'No renovable']
     else:
         pass
+    
+    macro_taula_filtrada = macro_taula_filtrada_wo_any[(macro_taula_filtrada_wo_any["Any"].isin([any_seleccionat,0]))]
 
     
     # Agrupar per Tipus energètic
@@ -413,3 +414,23 @@ with col2:
     st.plotly_chart(fig)
     
 
+col1, col2, col3, col4 = st.columns(4)
+
+pot_autoconsum = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Excedents autoconsum fotovoltaic'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_FV = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Fotovoltaica'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_eolica = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Eòlica'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+
+col1.metric("Potència autoconsum 2023", "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']), 
+            "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']-pot_autoconsum.loc[2022]['Potència instal·lada']), 
+            border=True)
+col2.metric("Potencial autoconsum", "4 mph", "2 mph", border=True)
+col2.markdown("Estudi URV")
+col3.metric("Potència fotovoltaica", "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']), 
+            "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']-pot_FV.loc[2022]['Potència instal·lada'])
+            , border=True)
+col4.metric("Potència eòlica", "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']), 
+            "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']-pot_eolica.loc[2022]['Potència instal·lada'])
+            , border=True)
