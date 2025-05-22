@@ -64,6 +64,8 @@ def moda_mes_comuna(s):
     modes = s.mode()
     return modes.iloc[0] if not modes.empty else None
 
+st.title("Visor dades de la transició energètica")
+
 # Carregar les dades del fitxer Excel
 excel_file = "bbdd.xlsx"
 consum_electric = carregar_dades(excel_file, "consum_electric")
@@ -71,6 +73,7 @@ consum_termic = carregar_dades(excel_file, "consum_termic")
 generacio_excedents = carregar_dades(excel_file, "generacio_electrica_excedents")
 generacio_plantes = carregar_dades(excel_file, "generacio_electrica_plantes")
 PROENCAT_demanda = carregar_dades(excel_file, "PROENCAT")
+generacio_potencial = carregar_dades(excel_file, "Potencial")
 
 # ESPAI PER FER COMPROVACIONS DE DADES, QUE TOTES LES COMARQUES ESTIGUIN EN LA SEVA PROVÍNCIA...
 
@@ -89,7 +92,7 @@ total_consum["Comarca"] = total_consum["Comarca"].str.strip()
 total_generacio["Comarca"] = total_generacio["Comarca"].str.strip()
 
 # Unir les dades per comarca i any
-macro_taula = pd.concat([total_consum, total_generacio, PROENCAT_demanda], ignore_index=True)
+macro_taula = pd.concat([total_consum, total_generacio, PROENCAT_demanda,generacio_potencial], ignore_index=True)
 macro_taula['renovable'] = macro_taula['renovable'].fillna('Desconegut')
 macro_taula = macro_taula.fillna(0)
 
@@ -175,11 +178,11 @@ taula_tipus_energetic = taula_tipus_energetic[taula_tipus_energetic["Província"
 
 
 # Crear el gràfic
-st.title("Consums i Generació per Comarca")
+
 
 # Agrupar dades per comarca, any i font
-consum_agrupat = total_consum.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
-generacio_agrupat = total_generacio.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
+#consum_agrupat = total_consum.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
+#generacio_agrupat = total_generacio.groupby(["Comarca", "Any", "Font"]).sum(numeric_only=True).reset_index()
 
 
 
@@ -215,7 +218,7 @@ with col1:
             )
             fig1.update_layout(
                 margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Balanç (kWh)")
+                coloraxis_colorbar=dict(title="Consum (MWh)")
             )
             st.plotly_chart(fig1, use_container_width=False, key='consum')
     
@@ -255,7 +258,7 @@ with col1:
             )
             fig2.update_layout(
                 margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Balanç (kWh)")
+                coloraxis_colorbar=dict(title="Generació (MWh)")
             )
             st.plotly_chart(fig2, use_container_width=False, key='generacio')
     
@@ -286,7 +289,7 @@ with col1:
             )
             fig3.update_layout(
                 margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Balanç (kWh)")
+                coloraxis_colorbar=dict(title="Balanç (MWh)")
             )
             
             st.plotly_chart(fig3, use_container_width=False, key='balanc')
@@ -418,6 +421,8 @@ col1, col2, col3, col4 = st.columns(4)
 
 pot_autoconsum = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Excedents autoconsum fotovoltaic'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+potencial_cobertes = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'autoconsum fotovoltaic cobertes'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
 pot_FV = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Fotovoltaica'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
 pot_eolica = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Eòlica'].filter(
@@ -426,11 +431,24 @@ pot_eolica = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 
 col1.metric("Potència autoconsum 2023", "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']), 
             "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']-pot_autoconsum.loc[2022]['Potència instal·lada']), 
             border=True)
-col2.metric("Potencial autoconsum", "4 mph", "2 mph", border=True)
-col2.markdown("Font: Estudi URV")
+col2.metric("Potencial autoconsum", "{:.2f} MW".format(potencial_cobertes.loc[0]['Potència instal·lada']), border=True)
+
 col3.metric("Potència fotovoltaica", "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']), 
             "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']-pot_FV.loc[2022]['Potència instal·lada'])
             , border=True)
 col4.metric("Potència eòlica", "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']), 
             "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']-pot_eolica.loc[2022]['Potència instal·lada'])
             , border=True)
+
+st.markdown("Fonts:")
+st.markdown('''Datadis  
+            1. Dades obertes de Catalunya  
+            2. Consum provincials de productes petrolífers de la CNMC  
+            3. Registre d'Autoconsum de Catalunya  
+            4. Registre RAIPRE (PRETOR)  
+            5. Ponència d'energies renovables   
+            6. DGT parc automobilistic  
+            7. ROMA vehicles agrícoles  
+            8. IDESCAT embarcacions, captures, cens habitatges, població  
+            9. Protecció civil i altres cerques per dades dels aeroports  
+            10. Determinació del potencial d'autoabastiment elèctric dels municipis de la demarcació de Tarragona a partir d'energia fotovoltaica i eòlica. Conveni marc DIPTA-URV 2020-2023. Codi Oficial: URV.FC03.01.00 (2021/ 09)''')
