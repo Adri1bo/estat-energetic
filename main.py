@@ -7,13 +7,12 @@ Created on Wed Nov 27 14:05:55 2024
 
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 import plotly.express as px
 import matplotlib.colors as mcolors
 import geopandas as gpd
-import folium
-from streamlit_folium import st_folium
 import numpy as np
+
+
 
 st.set_page_config(layout="wide")
 
@@ -63,6 +62,89 @@ def suma_nan_si_cal(df):
 def moda_mes_comuna(s):
     modes = s.mode()
     return modes.iloc[0] if not modes.empty else None
+
+def preparar_dades_si(df, columna_valor='valor', base_unit='Wh', decimals=2):
+    """
+    Converteix una columna numèrica a una escala SI coherent per visualització.
+    
+    Parameters:
+        df (pd.DataFrame): DataFrame original
+        columna_valor (str): nom de la columna amb els valors numèrics (ex: 'valor')
+        base_unit (str): unitat original (ex: 'Wh', 'W', etc.)
+        decimals (int): decimals a mostrar
+
+    Returns:
+        df (pd.DataFrame): amb columnes 'valor_si' i 'unitat_si'
+    """
+    escales_si = {
+        0: '',
+        1: 'k',
+        2: 'M',
+        3: 'G',
+        4: 'T',
+        5: 'P'
+    }
+
+    # Filtra valors positius per calcular logaritme
+    valors = df[columna_valor].replace(0, np.nan).dropna().abs()
+    if valors.empty:
+        ordre = 0
+    else:
+        log10_mean = np.log10(valors.mean())
+        ordre = min(max(int(log10_mean // 3), 0), max(escales_si.keys()))
+
+    factor = 10 ** (ordre * 3)
+    prefix_si = escales_si[ordre]
+
+    # Crea nova columna amb valor convertit i unitat nova
+    df = df.copy()
+    df['valor_si'] = df[columna_valor] / factor
+    df['unitat_si'] = prefix_si + base_unit
+
+    # Opcional: arrodonim (per si vols mostrar valors)
+    df['valor_si'] = df['valor_si'].round(decimals)
+
+    return df
+
+def grafic_mapa(df,tema,nombres='enters',colors="YlGnBu"):
+    if nombres == 'enters':
+        range_color=[0, df['valor_si'].abs().max()]
+    elif nombres =='reals':
+        range_color=[-df['valor_si'].abs().max(), df['valor_si'].abs().max()]
+        
+    fig1 = px.choropleth_mapbox(
+        df,
+        geojson=df.geometry,
+        locations=df.index,
+        color="valor_si",
+        color_continuous_scale=colors,  # escala positiva
+        range_color=range_color,
+        hover_name='Comarca',
+        custom_data=['valor_si', 'unitat_si'],
+        mapbox_style="carto-positron",
+        zoom=6,
+        center={"lat": 41.8, "lon": 1.5},
+        height=500
+    )
+    fig1.update_layout(
+        margin={"r":0,"t":0,"l":0,"b":0},
+        coloraxis_colorbar=dict(title="Consum (MWh)"),
+        yaxis_title="Consum (Wh)",
+        hoverlabel=dict(
+            font_size=18,
+            font_family="Arial"
+        )
+    )
+    # Indiquem quines columnes volem passar al hover mitjançant customdata
+    fig1.update_traces(
+        hovertemplate=f"%{{hovertext}}<br>{tema}: %{{customdata[0]:.2f}} %{{customdata[1]}}<extra></extra>"
+    )
+    
+    fig1.update_coloraxes(
+        colorbar_title=df['unitat_si'].iloc[0]
+    )
+    
+    return fig1
 
 st.title("Visor dades de la transició energètica")
 
@@ -197,29 +279,15 @@ with col1:
         taula_tipus_energetic_consum = taula_tipus_energetic[taula_tipus_energetic["Tipus energètic"] == "Consum energia final"]
         
         geo = gpd.GeoDataFrame(taula_tipus_energetic_consum, geometry="geometry", crs="EPSG:4326")
-        geo = geo.set_index("Comarca")  # fer servir com a ID
+        #geo = geo.set_index("Comarca")  # fer servir com a ID
     
         geo_filtrat = geo[geo["Any"].isin([any_seleccionat,0])]
+        geo_filtrat= preparar_dades_si(geo_filtrat, columna_valor='Valor', base_unit='Wh', decimals=2)
         
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig1 = px.choropleth_mapbox(
-                geo_filtrat,
-                geojson=geo_filtrat.geometry,
-                locations=geo_filtrat.index,
-                color="Valor",
-                color_continuous_scale="ylorrd",  # escala positiva
-                range_color=[0, geo_filtrat['Valor'].max()],
-                mapbox_style="carto-positron",
-                zoom=6,
-                center={"lat": 41.8, "lon": 1.5},
-                height=500
-            )
-            fig1.update_layout(
-                margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Consum (MWh)")
-            )
+            fig1 = grafic_mapa(geo_filtrat,tema = 'Consum', colors="ylorrd")
             st.plotly_chart(fig1, use_container_width=False, key='consum')
     
     with tab2:
@@ -237,29 +305,15 @@ with col1:
             "geometry":moda_mes_comuna
             }).reset_index()
         geo = gpd.GeoDataFrame(taula_tipus_energetic_generacio, geometry="geometry", crs="EPSG:4326")
-        geo = geo.set_index("Comarca")  # fer servir com a ID
+        #geo = geo.set_index("Comarca")  # fer servir com a ID
     
         geo_filtrat = geo[geo["Any"].isin([any_seleccionat,0])]
+        geo_filtrat= preparar_dades_si(geo_filtrat, columna_valor='Valor', base_unit='Wh', decimals=2)
         
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig2 = px.choropleth_mapbox(
-                geo_filtrat,
-                geojson=geo_filtrat.geometry,
-                locations=geo_filtrat.index,
-                color="Valor",
-                color_continuous_scale="YlGnBu",  # escala positiva
-                range_color=[0, geo_filtrat['Valor'].max()],
-                mapbox_style="carto-positron",
-                zoom=6,
-                center={"lat": 41.8, "lon": 1.5},
-                height=500
-            )
-            fig2.update_layout(
-                margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Generació (MWh)")
-            )
+            fig2 = grafic_mapa(geo_filtrat,tema = 'Generació',colors="YlGnBu")
             st.plotly_chart(fig2, use_container_width=False, key='generacio')
     
     with tab3:
@@ -267,31 +321,16 @@ with col1:
         taula_tipus_energetic_balanc = taula_tipus_energetic[taula_tipus_energetic["Tipus energètic"] == "balanç"]
         
         geo = gpd.GeoDataFrame(taula_tipus_energetic_balanc, geometry="geometry", crs="EPSG:4326")
-        geo = geo.set_index("Comarca")  # fer servir com a ID
+        #geo = geo.set_index("Comarca")  # fer servir com a ID
     
         geo_filtrat = geo[geo["Any"].isin([any_seleccionat,0])]
+        geo_filtrat= preparar_dades_si(geo_filtrat, columna_valor='Valor', base_unit='Wh', decimals=2)
         
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            max_abs = max(abs(geo_filtrat['Valor'].dropna()))
-            fig3 = px.choropleth_mapbox(
-                geo_filtrat,
-                geojson=geo_filtrat.geometry,
-                locations=geo_filtrat.index,
-                color="Valor",  # pot ser 'balanç'
-                color_continuous_scale="rdylgn",  # escala bipolar: vermell-blau
-                mapbox_style="carto-positron",
-                range_color=[-max_abs, max_abs],  # 
-                center={"lat": 41.8, "lon": 1.5},
-                zoom=6,
-                height=500
-            )
-            fig3.update_layout(
-                margin={"r":0,"t":0,"l":0,"b":0},
-                coloraxis_colorbar=dict(title="Balanç (MWh)")
-            )
             
+            fig3 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
             st.plotly_chart(fig3, use_container_width=False, key='balanc')
     
     with tab4:
@@ -302,28 +341,16 @@ with col1:
         macro_taula_filtre_map_2 = macro_taula_filtre_map_1[macro_taula_filtre_map_1["Font"] == valor2]
         
         geo = gpd.GeoDataFrame(macro_taula_filtre_map_2, geometry="geometry", crs="EPSG:4326")
-        geo = geo.set_index("Comarca")  # fer servir com a ID
+        #geo = geo.set_index("Comarca")  # fer servir com a ID
     
         geo_filtrat = geo[geo["Any"].isin([any_seleccionat,0])]
-        
+        geo_filtrat= preparar_dades_si(geo_filtrat, columna_valor='Valor', base_unit='Wh', decimals=2)
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig4 = px.choropleth_mapbox(
-                geo_filtrat,
-                geojson=geo_filtrat.geometry,
-                locations=geo_filtrat.index,
-                color="Valor",
-                color_continuous_scale="YlGnBu",  # escala positiva
-                range_color=[0, geo_filtrat['Valor'].max()],
-                mapbox_style="carto-positron",
-                zoom=6,
-                center={"lat": 41.7, "lon": 1.5},
-                height=500
-            )
-            
+            fig4 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
             st.plotly_chart(fig4, use_container_width=False, key='altres')
-            
+            st.markdown("per alguns ítems només hi ha dades de la província de Tarragona")   
             
 with col2:
     # Filtrar dades per comarca i any seleccionats
@@ -368,7 +395,7 @@ with col2:
     
     #ordenar alfabeticament
     dades_long = dades_long.sort_values(by='Font_Estat')
-
+    dades_long= preparar_dades_si(dades_long, columna_valor='Valor', base_unit='Wh', decimals=2)
     
     # Definir un esquema de colors personalitzat
     color_map = {}
@@ -395,11 +422,11 @@ with col2:
     fig = px.bar(
         dades_long,
         x="Tipus energètic_",
-        y="Valor",
+        y="valor_si",
         color="Font_Estat",
-        text="Valor",
+        custom_data=['unitat_si'],
+        text="valor_si",
         title=f"Consum i Generació a {provincies_seleccionades}, {comarques_seleccionades} ({any_seleccionat})",
-        labels={"Valor": "Energia (MWh)", "Tipus energètic_": "Tipus Energètic"},
         height=700,  # Augmentar l'alçada del gràfic
         color_discrete_map=color_map  # Assignar colors personalitzats
     )
@@ -408,9 +435,21 @@ with col2:
     fig.update_layout(
         barmode="stack",  # Barres apilades
         legend_title="Font i estat",
-        xaxis_title="Tipus energètic_",
-        yaxis_title="Energia (MWh)",
-        legend=dict(x=1.05, y=1)  # Moure llegenda fora del gràfic
+        xaxis_title="Tipus energètic",
+        yaxis_title="Energia "+dades_long['unitat_si'][0],
+        legend=dict(x=1.05, y=1),  # Moure llegenda fora del gràfic
+        hoverlabel=dict(
+            font_size=18,
+            font_family="Arial"
+        )
+    )
+    
+    # Indiquem quines columnes volem passar al hover mitjançant customdata
+    fig.update_traces(
+        texttemplate="%{y:.2f} ",
+        textposition="auto",
+        textfont=dict(size=16),
+        hovertemplate = "%{x}<br>Energia: %{y:.2f} %{customdata[0]}<extra></extra>"
     )
     
     # Mostrar el gràfic interactiu
@@ -421,23 +460,31 @@ col1, col2, col3, col4 = st.columns(4)
 
 pot_autoconsum = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Excedents autoconsum fotovoltaic'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_autoconsum= preparar_dades_si(pot_autoconsum, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
+
 potencial_cobertes = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'autoconsum fotovoltaic cobertes'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+potencial_cobertes= preparar_dades_si(potencial_cobertes, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
+
 pot_FV = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Fotovoltaica'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_FV= preparar_dades_si(pot_FV, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
+
 pot_eolica = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Eòlica'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_eolica= preparar_dades_si(pot_eolica, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
 
-col1.metric("Potència autoconsum 2023", "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']), 
-            "{:.2f} MW".format(pot_autoconsum.loc[2023]['Potència instal·lada']-pot_autoconsum.loc[2022]['Potència instal·lada']), 
+
+col1.metric("Potència autoconsum 2023", str(pot_autoconsum.loc[2023]['valor_si'])+' '+pot_autoconsum.loc[2023]['unitat_si'], 
+            str(pot_autoconsum.loc[2023]['valor_si']-pot_autoconsum.loc[2022]['valor_si'])+' '+pot_autoconsum.loc[2023]['unitat_si'], 
             border=True)
-col2.metric("Potencial autoconsum", "{:.2f} MW".format(potencial_cobertes.loc[0]['Potència instal·lada']), border=True)
+col2.metric("Potencial autoconsum", str(potencial_cobertes.loc[0]['valor_si'])+' '+potencial_cobertes.loc[0]['unitat_si'], border=True)
 
-col3.metric("Potència fotovoltaica", "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']), 
-            "{:.2f} MW".format(pot_FV.loc[2023]['Potència instal·lada']-pot_FV.loc[2022]['Potència instal·lada'])
+col3.metric("Potència fotovoltaica", str(pot_FV.loc[2023]['valor_si'])+' '+pot_FV.loc[2023]['unitat_si'], 
+            str(pot_FV.loc[2023]['valor_si']-pot_FV.loc[2022]['valor_si'])+' '+pot_FV.loc[2023]['unitat_si']
             , border=True)
-col4.metric("Potència eòlica", "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']), 
-            "{:.2f} MW".format(pot_eolica.loc[2023]['Potència instal·lada']-pot_eolica.loc[2022]['Potència instal·lada'])
+col4.metric("Potència eòlica", str(pot_eolica.loc[2023]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'], 
+            str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si']
             , border=True)
 
 st.markdown("Fonts:")
@@ -451,4 +498,7 @@ st.markdown('''Datadis
             7. ROMA vehicles agrícoles  
             8. IDESCAT embarcacions, captures, cens habitatges, població  
             9. Protecció civil i altres cerques per dades dels aeroports  
-            10. Determinació del potencial d'autoabastiment elèctric dels municipis de la demarcació de Tarragona a partir d'energia fotovoltaica i eòlica. Conveni marc DIPTA-URV 2020-2023. Codi Oficial: URV.FC03.01.00 (2021/ 09)''')
+            10. Determinació del potencial d'autoabastiment elèctric dels municipis de la demarcació de Tarragona a partir d'energia fotovoltaica i eòlica. Conveni marc DIPTA-URV 2020-2023. Codi Oficial: URV.FC03.01.00 (2021/ 09)
+              
+            Visor desenvolupat per les Oficines Comarcals de Transició Energètica del Baix Ebre (Gemma) i l'Alt Camp (Adrià)
+            © 2025''')
