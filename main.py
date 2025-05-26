@@ -213,7 +213,7 @@ with st.popover("Configura filtres"):
     
     # Selecció de comarques
     comarques = macro_taula["Comarca"].unique()
-    comarques_seleccionades = st.multiselect("Selecciona comarques:", comarques, default=comarques[0])
+    comarques_seleccionades = st.multiselect("Selecciona comarques:", comarques, default=None)
     
     # Filtrar dades per comarca seleccionada
     # Selecció d'any
@@ -449,7 +449,7 @@ with col2:
         texttemplate="%{y:.2f} ",
         textposition="auto",
         textfont=dict(size=16),
-        hovertemplate = "%{x}<br>Energia: %{y:.2f} %{customdata[0]}<extra></extra>"
+        hovertemplate = "%{x}<br>%{fullData.name}: %{y:.2f} %{customdata[0]}<extra></extra>"
     )
     
     # Mostrar el gràfic interactiu
