@@ -151,8 +151,11 @@ def grafic_barres(df, tema, nombres='enters', colors="YlGnBu"):
         range_color = [0, df['valor_si'].abs().max()]
     elif nombres == 'reals':
         range_color = [-df['valor_si'].abs().max(), df['valor_si'].abs().max()]
-    
-    # Crear un gràfic de barres en lloc d'un mapa
+
+    # Ordenar les barres per valor (aquí s'ordena per la columna 'valor_si')
+    df = df.sort_values(by='valor_si', ascending=False)  
+
+    # Crear el gràfic de barres
     fig = px.bar(
         df,
         x='Comarca',  # Assumeix que tens una columna amb noms de comarca
@@ -259,7 +262,8 @@ with st.popover("Configura filtres"):
     # Selecció d'any
     anys = macro_taula["Any"].unique()
     anys = anys[anys != 0.0]
-    any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0, value = 2023.0)
+    #any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0, value = 2023.0)
+    any_seleccionat = 2023
     # Selecció d'estats de les plantes
     estats_macro = macro_taula["Estat"].unique()
     estats = generacio_plantes["Estat"].unique()
@@ -486,14 +490,21 @@ with col2:
         else:
             color_map[categoria] = default_colors[index % len(default_colors)]
     
-    # Crear el gràfic interactiu amb colors personalitzats
+    # Calcular el total de cada barra apilada
+    df_totals = dades_long.groupby('Tipus energètic_')['valor_si'].sum().reset_index()
+    
+    # Afegir el total al `customdata`
+    # Ara afegim una nova columna de totals a dades_long per passar-la al customdata
+    dades_long['total'] = dades_long['Tipus energètic_'].map(df_totals.set_index('Tipus energètic_')['valor_si'])
+    
+    # Crear el gràfic de barres apilades
     fig = px.bar(
         dades_long,
         x="Tipus energètic_",
         y="valor_si",
         color="Font_Estat",
-        custom_data=['unitat_si'],
-        text="valor_si",
+        custom_data=['unitat_si', 'total'],  # Afegir 'total' a custom_data
+        text="valor_si",  # Mostra el valor dins de la barra
         title=f"Consum i Generació a {provincies_seleccionades}, {comarques_seleccionades} ({any_seleccionat})",
         height=700,  # Augmentar l'alçada del gràfic
         color_discrete_map=color_map  # Assignar colors personalitzats
@@ -517,7 +528,9 @@ with col2:
         texttemplate="%{y:.2f} ",
         textposition="auto",
         textfont=dict(size=16),
-        hovertemplate = "%{x}<br>%{fullData.name}: %{y:.2f} %{customdata[0]}<extra></extra>"
+        hovertemplate=(
+            "%{x}<br>%{fullData.name}: %{y:.2f} %{customdata[0]}<br>Total: %{customdata[1]:.2f} %{customdata[0]}<extra></extra>"
+        )
     )
     
     # Mostrar el gràfic interactiu

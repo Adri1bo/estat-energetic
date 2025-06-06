@@ -1,1 +1,2 @@
 Desquadrament de potencies pic entre PRETOR i base de dades després de tractar les dades
+Dades del 2022 fer-les accessibles i solucionar el problema en el gràfic de barres de mostrar el consum d'energia final que toca en funció de l'any seleccionat
