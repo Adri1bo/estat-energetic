@@ -146,6 +146,46 @@ def grafic_mapa(df,tema,nombres='enters',colors="YlGnBu"):
     
     return fig1
 
+def grafic_barres(df, tema, nombres='enters', colors="YlGnBu"):
+    if nombres == 'enters':
+        range_color = [0, df['valor_si'].abs().max()]
+    elif nombres == 'reals':
+        range_color = [-df['valor_si'].abs().max(), df['valor_si'].abs().max()]
+    
+    # Crear un gràfic de barres en lloc d'un mapa
+    fig = px.bar(
+        df,
+        x='Comarca',  # Assumeix que tens una columna amb noms de comarca
+        y='valor_si',
+        color='valor_si',
+        color_continuous_scale=colors,
+        custom_data=['valor_si', 'unitat_si'],
+        range_color=range_color,
+        labels={'valor_si': 'Consum (Wh)', 'Comarca': 'Comarca'},
+        hover_data=['valor_si', 'unitat_si'],
+        hover_name='Comarca',
+    )
+
+    fig.update_layout(
+        margin={"r":0,"t":0,"l":0,"b":0},
+        coloraxis_colorbar=dict(title="Consum (MWh)"),
+        hoverlabel=dict(
+            font_size=18,
+            font_family="Arial"
+        ),
+        yaxis_title="Energia "+df['unitat_si'].iloc[0],
+    )
+    # Indiquem quines columnes volem passar al hover mitjançant customdata
+    fig.update_traces(
+        hovertemplate="%{x}: %{customdata[0]:.2f} %{customdata[1]}<extra></extra>"
+    )
+
+    fig.update_coloraxes(
+        colorbar_title=df['unitat_si'].iloc[0]
+    )
+
+    return fig
+
 st.title("Visor dades de la transició energètica")
 
 # Carregar les dades del fitxer Excel
@@ -209,7 +249,7 @@ taula_tipus_energetic_mare=macro_taula.groupby(['Comarca','Tipus energètic','re
 with st.popover("Configura filtres"):
     # Selecció de Províncies
     provincies = macro_taula["Província"].unique()
-    provincies_seleccionades = st.multiselect("Selecciona Províncies:", provincies, default=provincies[0])
+    provincies_seleccionades = list(st.segmented_control("Selecciona Províncies:", provincies, default=provincies[0],selection_mode="multi"))
     
     # Selecció de comarques
     comarques = macro_taula["Comarca"].unique()
@@ -219,11 +259,11 @@ with st.popover("Configura filtres"):
     # Selecció d'any
     anys = macro_taula["Any"].unique()
     anys = anys[anys != 0.0]
-    any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0)
+    any_seleccionat = st.slider("Selecciona l'any", min_value=min(anys), max_value=max(anys), step=1.0, value = 2023.0)
     # Selecció d'estats de les plantes
     estats_macro = macro_taula["Estat"].unique()
     estats = generacio_plantes["Estat"].unique()
-    estats_seleccionats = st.multiselect("Selecciona els estats:", estats, default=estats)
+    estats_seleccionats = st.pills("Selecciona els estats:", estats, default=estats, selection_mode="multi")
     estats_seleccionats = list(set(estats_macro) - set(estats)) + estats_seleccionats
     renovables = st.toggle("Només generació amb renovables", value = True)
     if renovables:
@@ -255,7 +295,7 @@ balanc_long = balanc_long[['Comarca','Província','Any',"geometry", 'Valor','Tip
 taula_tipus_energetic = pd.concat([taula_tipus_energetic, balanc_long], ignore_index=True)
 
 # FILTRE TEMPORAL TARRAGONA
-taula_tipus_energetic = taula_tipus_energetic[taula_tipus_energetic["Província"] == "Tarragona"]
+#taula_tipus_energetic = taula_tipus_energetic[taula_tipus_energetic["Província"] == "Tarragona"]
 
 
 
@@ -287,8 +327,15 @@ with col1:
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig1 = grafic_mapa(geo_filtrat,tema = 'Consum', colors="ylorrd")
-            st.plotly_chart(fig1, use_container_width=False, key='consum')
+            # Crear una selecció per triar el tipus de gràfic
+            opcio_grafic = st.pills("Selecciona el tipus de gràfic:",('Mapa', 'Gràfic de barres'), default = 'Mapa',key='pill1')
+        
+            if opcio_grafic == 'Mapa':
+                fig1 = grafic_mapa(geo_filtrat, tema='Consum', colors="ylorrd")
+                st.plotly_chart(fig1, use_container_width=True, key='consum')
+            elif opcio_grafic == 'Gràfic de barres':
+                fig = grafic_barres(geo_filtrat, tema='Consum', colors="ylorrd")
+                st.plotly_chart(fig, use_container_width=True, key='consumbarres')
     
     with tab2:
         # --- Selecció del valor a mostrar ---
@@ -313,8 +360,15 @@ with col1:
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig2 = grafic_mapa(geo_filtrat,tema = 'Generació',colors="YlGnBu")
-            st.plotly_chart(fig2, use_container_width=False, key='generacio')
+            # Crear una selecció per triar el tipus de gràfic
+            opcio_grafic = st.pills("Selecciona el tipus de gràfic:",('Mapa', 'Gràfic de barres'), default = 'Mapa',key='pill2')
+        
+            if opcio_grafic == 'Mapa':
+                fig2 = grafic_mapa(geo_filtrat,tema = 'Generació',colors="YlGnBu")
+                st.plotly_chart(fig2, use_container_width=False, key='generacio')
+            elif opcio_grafic == 'Gràfic de barres':
+                fig = grafic_barres(geo_filtrat,tema = 'Generació',colors="YlGnBu")
+                st.plotly_chart(fig, use_container_width=True, key='generaciobarres')
     
     with tab3:
         # --- Selecció del valor a mostrar ---
@@ -328,17 +382,24 @@ with col1:
         
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
-        else:
-            
-            fig3 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
-            st.plotly_chart(fig3, use_container_width=False, key='balanc')
+        else:            
+            # Crear una selecció per triar el tipus de gràfic
+            opcio_grafic = st.pills("Selecciona el tipus de gràfic:",('Mapa', 'Gràfic de barres'), default = 'Mapa',key='pill3')
+        
+            if opcio_grafic == 'Mapa':
+                fig3 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
+                st.plotly_chart(fig3, use_container_width=False, key='balanc')
+            elif opcio_grafic == 'Gràfic de barres':
+                fig = grafic_barres(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
+                st.plotly_chart(fig, use_container_width=True, key='balancbarres')
     
     with tab4:
         # --- Selecció del valor a mostrar ---
         valor = st.selectbox("Tria el valor a representar", macro_taula['Tipus energètic'].unique())
         macro_taula_filtre_map_1 = macro_taula[macro_taula["Tipus energètic"] == valor]
-        valor2 = st.selectbox("Escull la font", macro_taula_filtre_map_1['Font'].unique())
-        macro_taula_filtre_map_2 = macro_taula_filtre_map_1[macro_taula_filtre_map_1["Font"] == valor2]
+        valor2 = [st.segmented_control("Escull la font", macro_taula_filtre_map_1['Font'].unique(),
+                                      default=macro_taula_filtre_map_1['Font'].unique()[0],selection_mode = "single")]
+        macro_taula_filtre_map_2 = macro_taula_filtre_map_1[macro_taula_filtre_map_1["Font"].isin(valor2)]
         
         geo = gpd.GeoDataFrame(macro_taula_filtre_map_2, geometry="geometry", crs="EPSG:4326")
         #geo = geo.set_index("Comarca")  # fer servir com a ID
@@ -348,8 +409,15 @@ with col1:
         if geo_filtrat.empty:
             st.warning('Per aquest any no hi ha dades')
         else:
-            fig4 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
-            st.plotly_chart(fig4, use_container_width=False, key='altres')
+            # Crear una selecció per triar el tipus de gràfic
+            opcio_grafic = st.pills("Selecciona el tipus de gràfic:",('Mapa', 'Gràfic de barres'), default = 'Mapa',key='pill4')
+        
+            if opcio_grafic == 'Mapa':
+                fig4 = grafic_mapa(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
+                st.plotly_chart(fig4, use_container_width=False, key='altres')
+            elif opcio_grafic == 'Gràfic de barres':
+                fig = grafic_barres(geo_filtrat,tema = 'Balanç',nombres='reals', colors="rdylgn")
+                st.plotly_chart(fig, use_container_width=True, key='altresbarres')
             st.markdown("per alguns ítems només hi ha dades de la província de Tarragona")   
             
 with col2:
@@ -456,7 +524,7 @@ with col2:
     st.plotly_chart(fig)
     
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col3, col4, col5 = st.columns(4)
 
 pot_autoconsum = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Excedents autoconsum fotovoltaic'].filter(
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
@@ -474,18 +542,76 @@ pot_eolica = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 
     items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
 pot_eolica= preparar_dades_si(pot_eolica, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
 
+pot_hidr = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Hidràulica'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_hidr= preparar_dades_si(pot_hidr, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
+
+pot_nuclear = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Nuclear'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_nuclear= preparar_dades_si(pot_nuclear, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
+
+pot_cogeneracio = macro_taula_filtrada_wo_any[macro_taula_filtrada_wo_any['Font'] == 'Cogeneració'].filter(
+    items=['Any','Potència instal·lada']).groupby('Any').sum('Potència instal·lada')
+pot_cogeneracio= preparar_dades_si(pot_cogeneracio, columna_valor='Potència instal·lada', base_unit='W', decimals=2)
 
 col1.metric("Potència autoconsum 2023", str(pot_autoconsum.loc[2023]['valor_si'])+' '+pot_autoconsum.loc[2023]['unitat_si'], 
-            str(pot_autoconsum.loc[2023]['valor_si']-pot_autoconsum.loc[2022]['valor_si'])+' '+pot_autoconsum.loc[2023]['unitat_si'], 
+            str(round(pot_autoconsum.loc[2023]['valor_si']-pot_autoconsum.loc[2022]['valor_si'],1))+' '+pot_autoconsum.loc[2023]['unitat_si'], 
             border=True)
-col2.metric("Potencial autoconsum", str(potencial_cobertes.loc[0]['valor_si'])+' '+potencial_cobertes.loc[0]['unitat_si'], border=True)
+#col2.metric("Potencial autoconsum", str(potencial_cobertes.loc[0]['valor_si'])+' '+potencial_cobertes.loc[0]['unitat_si'], border=True)
+try: #en cas de que no tingui dades que aparegui la mètrica com a 0
+    pot_FV_metric_value = pot_FV.loc[2023]['valor_si']
+    pot_FV_metric_unitat = pot_FV.loc[2023]['unitat_si']
+except:
+    pot_FV_metric_value = 0
+    pot_FV_metric_unitat='W'
 
-col3.metric("Potència fotovoltaica", str(pot_FV.loc[2023]['valor_si'])+' '+pot_FV.loc[2023]['unitat_si'], 
-            str(pot_FV.loc[2023]['valor_si']-pot_FV.loc[2022]['valor_si'])+' '+pot_FV.loc[2023]['unitat_si']
-            , border=True)
-col4.metric("Potència eòlica", str(pot_eolica.loc[2023]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'], 
-            str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si']
-            , border=True)
+col3.metric("Potència fotovoltaica", str(pot_FV_metric_value)+' '+pot_FV_metric_unitat, 
+            #str(pot_FV.loc[2023]['valor_si']-pot_FV.loc[2022]['valor_si'])+' '+pot_FV.loc[2023]['unitat_si'],
+            border=True)
+
+try: #en cas de que no tingui dades que aparegui la mètrica com a 0
+    pot_eolic_metric_value = pot_eolica.loc[2023]['valor_si']
+    pot_eolic_metric_unitat = pot_eolica.loc[2023]['unitat_si']
+except:
+    pot_eolic_metric_value = 0
+    pot_eolic_metric_unitat='W'
+    
+col4.metric("Potència eòlica", str(pot_eolic_metric_value)+' '+pot_eolic_metric_unitat, 
+            #str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'],
+            border=True)
+
+try: #en cas de que no tingui dades que aparegui la mètrica com a 0
+    pot_hidr_metric_value = pot_hidr.loc[2023]['valor_si']
+    pot_hidr_metric_unitat = pot_hidr.loc[2023]['unitat_si']
+except:
+    pot_hidr_metric_value = 0
+    pot_hidr_metric_unitat='W'
+    
+col5.metric("Potència hidràulica", str(pot_hidr_metric_value)+' '+pot_hidr_metric_unitat, 
+            #str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'],
+            border=True)
+
+try: #en cas de que no tingui dades que aparegui la mètrica com a 0
+    pot_nuclear_metric_value = pot_nuclear.loc[2023]['valor_si']
+    pot_nuclear_metric_unitat = pot_nuclear.loc[2023]['unitat_si']
+except:
+    pot_nuclear_metric_value = 0
+    pot_nuclear_metric_unitat='W'
+    
+col1.metric("Potència nuclear", str(pot_nuclear_metric_value)+' '+pot_nuclear_metric_unitat, 
+            #str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'],
+            border=True)
+
+try: #en cas de que no tingui dades que aparegui la mètrica com a 0
+    pot_cogeneracio_metric_value = pot_cogeneracio.loc[2023]['valor_si']
+    pot_cogeneracio_metric_unitat = pot_cogeneracio.loc[2023]['unitat_si']
+except:
+    pot_cogeneracio_metric_value = 0
+    pot_cogeneracio_metric_unitat='W'
+    
+col3.metric("Potència cogeneració", str(pot_cogeneracio_metric_value)+' '+pot_cogeneracio_metric_unitat, 
+            #str(pot_eolica.loc[2023]['valor_si']-pot_eolica.loc[2022]['valor_si'])+' '+pot_eolica.loc[2023]['unitat_si'],
+            border=True)
 
 st.markdown("Fonts:")
 st.markdown('''Datadis  
